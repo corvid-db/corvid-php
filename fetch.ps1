@@ -14,7 +14,7 @@ param()
 $ErrorActionPreference = "Stop"
 
 # THE pin. Bump here and nowhere else (fetch.sh carries the same value).
-$CorvidVersion = "v0.3.3"
+$CorvidVersion = "v0.3.4"
 $Repo = "corvid-db/corvid"
 
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
