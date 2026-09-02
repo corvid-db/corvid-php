@@ -122,8 +122,10 @@ corvid::QueryBuilder::run	SELECT shaping	MAPPED	Query->run()	golden:queries.txt:
 corvid::Db	Lifecycle	MAPPED	Corvid\Db	golden:admin.txt:FILEDB
 corvid::Db::open	Lifecycle	MAPPED	Db::open(path) — file-backed	golden:admin.txt:FILEDB
 corvid::Db::open_in_memory	Lifecycle	MAPPED	Db::openMemory()	golden:mutations.txt (every non-values fixture opens via Db::openMemory())
+corvid::Db::open_with_backend	Lifecycle	N/A	N/A	wasm-only backend seam (redb StorageBackend over custom storage): no C-ABI/native equivalent; browser-binding machinery, not constructible here
 corvid::Db::collection	Lifecycle	MAPPED	Db->collection(name) -> Corvid\Collection	golden:admin.txt:COLL
 corvid::Db::backup	Lifecycle	MAPPED	Db->backup(path)	golden:admin.txt:BACKUP
+corvid::Db::backup_with_backend	Lifecycle	N/A	N/A	wasm-only backend seam (redb StorageBackend over custom storage): no C-ABI/native equivalent; browser-binding machinery, not constructible here
 corvid::Db::bulk	Lifecycle	N/A	N/A	put_many covers the bulk fast path (FFI.md §9); Db::bulk not exposed
 corvid::Db::compact	Lifecycle	MAPPED	Db->compact()	golden:admin.txt:COMPACT
 corvid::Db::collections	Lifecycle	MAPPED	Db->collections() -> string[]	golden:admin.txt:COLLECTIONS
@@ -148,12 +150,14 @@ corvid::db::Page	SELECT shaping	MAPPED	Collection->page() -> Corvid\Page { rows,
 corvid::Store	Lifecycle	N/A	N/A	engine low-level byte KV (Store/WriteBatch/ReadBatch); the v1 binding is typed-document only (FFI.md ruling 1)
 corvid::Store::open	Lifecycle	N/A	N/A	engine low-level byte KV (Store/WriteBatch/ReadBatch); the v1 binding is typed-document only (FFI.md ruling 1)
 corvid::Store::open_in_memory	Lifecycle	N/A	N/A	engine low-level byte KV (Store/WriteBatch/ReadBatch); the v1 binding is typed-document only (FFI.md ruling 1)
+corvid::Store::open_with_backend	Lifecycle	N/A	N/A	wasm-only backend seam (redb StorageBackend over custom storage): no C-ABI/native equivalent; browser-binding machinery, not constructible here
 corvid::Store::set_relaxed_durability	Lifecycle	N/A	N/A	engine low-level byte KV (Store/WriteBatch/ReadBatch); the v1 binding is typed-document only (FFI.md ruling 1)
 corvid::Store::begin_bulk	Lifecycle	N/A	N/A	engine low-level byte KV (Store/WriteBatch/ReadBatch); the v1 binding is typed-document only (FFI.md ruling 1)
 corvid::Store::flush	Lifecycle	N/A	N/A	engine low-level byte KV (Store/WriteBatch/ReadBatch); the v1 binding is typed-document only (FFI.md ruling 1)
 corvid::Store::compact	Lifecycle	N/A	N/A	engine low-level byte KV (Store/WriteBatch/ReadBatch); the v1 binding is typed-document only (FFI.md ruling 1)
 corvid::Store::next_auto_id	Lifecycle	N/A	N/A	engine low-level byte KV (Store/WriteBatch/ReadBatch); the v1 binding is typed-document only (FFI.md ruling 1)
 corvid::Store::backup	Lifecycle	N/A	N/A	engine low-level byte KV (Store/WriteBatch/ReadBatch); the v1 binding is typed-document only (FFI.md ruling 1)
+corvid::Store::backup_with_backend	Lifecycle	N/A	N/A	wasm-only backend seam (redb StorageBackend over custom storage): no C-ABI/native equivalent; browser-binding machinery, not constructible here
 corvid::Store::transaction	Lifecycle	N/A	N/A	engine low-level byte KV (Store/WriteBatch/ReadBatch); the v1 binding is typed-document only (FFI.md ruling 1)
 corvid::Store::read	Lifecycle	N/A	N/A	engine low-level byte KV (Store/WriteBatch/ReadBatch); the v1 binding is typed-document only (FFI.md ruling 1)
 corvid::Store::put	Lifecycle	N/A	N/A	engine low-level byte KV (Store/WriteBatch/ReadBatch); the v1 binding is typed-document only (FFI.md ruling 1)
