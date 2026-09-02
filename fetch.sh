@@ -18,7 +18,7 @@
 
 set -euo pipefail
 
-CORVID_VERSION="v0.3.3"          # THE pin. Bump here and nowhere else.
+CORVID_VERSION="v0.3.4"          # THE pin. Bump here and nowhere else.
 REPO="corvid-db/corvid"
 
 cd "$(dirname "$0")"
