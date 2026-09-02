@@ -1,0 +1,42 @@
+# Fetched engine artifacts — never vendored (docs/PLAN.md binding rules).
+deps/
+
+# phpize build tree for the extension (configured in ext/corvid).
+# Everything phpize/configure/make drops here is generated — the sources
+# are config.m4, config.w32, corvid.c, php_corvid.h, corvid.php,
+# package.xml.
+ext/corvid/.libs/
+ext/corvid/libs/
+ext/corvid/modules/
+ext/corvid/autom4te.cache/
+ext/corvid/build/
+ext/corvid/config.h
+ext/corvid/config.h.in
+ext/corvid/config.log
+ext/corvid/config.nice
+ext/corvid/config.status
+ext/corvid/Makefile
+ext/corvid/Makefile.fragments
+ext/corvid/Makefile.objects
+ext/corvid/aclocal.m4
+ext/corvid/configure
+ext/corvid/configure.ac
+ext/corvid/configure~
+ext/corvid/install-sh
+ext/corvid/ltmain.sh
+ext/corvid/libtool
+ext/corvid/missing
+ext/corvid/mkinstalldirs
+ext/corvid/run-tests.php
+ext/corvid/*.dep
+ext/corvid/*.la
+ext/corvid/*.lo
+ext/corvid/*.o
+
+# Tests / tooling artifacts.
+.phpunit.result.cache
+.phpunit.cache/
+vendor/
+composer.lock
+phpunit.phar
+.php-version

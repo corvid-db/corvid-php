@@ -1,0 +1,24 @@
+{
+    "name": "corvid/php-corvid",
+    "description": "PHP bindings for corvid — a native PHP extension over the embedded database's typed C ABI",
+    "type": "php-extension",
+    "license": "MIT",
+    "keywords": ["database", "embedded", "vector-search", "full-text-search", "graph", "geo", "hybrid-search"],
+    "require": {
+        "php": ">=8.3",
+        "ext-corvid": "*"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^12.0"
+    },
+    "autoload-dev": {
+        "files": ["tests/golden_harness.php"]
+    },
+    "scripts": {
+        "test": "phpunit --configuration phpunit.xml.dist"
+    },
+    "support": {
+        "issues": "https://github.com/corvid-db/corvid-php/issues",
+        "source": "https://github.com/corvid-db/corvid-php"
+    }
+}
