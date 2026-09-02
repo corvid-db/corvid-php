@@ -144,7 +144,7 @@ asBool()/asText()/asBytes()/asVector()`, `mapKeys()`, `clone()`).
 
 `tests/run-golden.php` (and the PHPUnit front) replays the engine's
 entire **golden fixture suite** — 267 executable lines across 8 files,
-including the v0.3.1 `VMAP_KEYS`/`GET_KEYS` (map-key iteration) and
+including the v0.3.0 `VMAP_KEYS`/`GET_KEYS` (map-key iteration) and
 `PHRASE`/`PHRASE_K0` (direct positional search) lines — against the
 **downloaded** cdylib, through this binding's public PHP API: every
 counted line must dispatch, the first failure names file:line + OP +
