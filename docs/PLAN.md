@@ -203,7 +203,7 @@ The rulings this table embodies:
 `Corvid\Values` exposes the value-family reads on this mapping —
 `type()`, `len()`, `asInt()` / `asFloat()` / `asBool()` / `asText()` /
 `asBytes()` / `asVector()` (each `null` on wrong type, mirroring the
-engine's `Option` accessors), `mapKeys()` (the v0.3.2 §4.4 iterator:
+engine's `Option` accessors), `mapKeys()` (the v0.3.0 §4.4 iterator:
 ascending key-byte order; non-maps answer `[]` — inert), `clone()`, and
 the harness-facing `push()` / `put()` container-mutation checks, plus
 `selfCheck()` (the §7 inert shapes: every `_free(NULL)` no-op, NULL-cursor
