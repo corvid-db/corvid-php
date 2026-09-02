@@ -63,7 +63,7 @@ Requirements: PHP 8.3+ with its dev headers (`phpize`, `php-config`),
 a C compiler, and `curl` + `shasum`/`sha256sum`.
 
 ```sh
-./fetch.sh                        # download + sha256-verify corvid v0.3.0
+./fetch.sh                        # download + sha256-verify corvid v0.3.1
 ./scripts/build-ext.sh            # phpize + configure + make
 php -d extension=ext/corvid/modules/corvid.so tests/run-golden.php
 php -d extension=ext/corvid/modules/corvid.so examples/quickstart.php
@@ -144,7 +144,7 @@ asBool()/asText()/asBytes()/asVector()`, `mapKeys()`, `clone()`).
 
 `tests/run-golden.php` (and the PHPUnit front) replays the engine's
 entire **golden fixture suite** — 267 executable lines across 8 files,
-including the v0.3.0 `VMAP_KEYS`/`GET_KEYS` (map-key iteration) and
+including the v0.3.1 `VMAP_KEYS`/`GET_KEYS` (map-key iteration) and
 `PHRASE`/`PHRASE_K0` (direct positional search) lines — against the
 **downloaded** cdylib, through this binding's public PHP API: every
 counted line must dispatch, the first failure names file:line + OP +
@@ -166,7 +166,7 @@ still needs.
 
 The engine pin lives in one variable per fetch script
 (`CORVID_VERSION` in `fetch.sh`, `$CorvidVersion` in `fetch.ps1`,
-mirrored in `.engine-pin`) — today `v0.3.0`. Artifacts are always taken
+mirrored in `.engine-pin`) — today `v0.3.1`. Artifacts are always taken
 from that exact tag's GitHub release and sha256-verified; `deps/` is
 never committed. Engine-pin bumps fan out to every binding via the
 engine repo's `scripts/bindings/bump.sh`.
