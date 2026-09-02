@@ -1,0 +1,50 @@
+// config.w32 — the Windows (MSVC) build for the corvid PHP extension.
+//
+// STATUS, STATED HONESTLY (README + docs/PLAN.md): this file is shipped
+// for the standard `configure --enable-corvid` / nmake flow against the
+// fetched artifacts (fetch.ps1 normalizes corvid.h + corvid.dll + the
+// import library into deps/current), syntax-checked in CI (node
+// --check), but it has NOT been compiled against a Windows PHP source
+// tree — reproducing PHP's Windows build matrix (php-sdk-binary-tools +
+// Visual Studio + matching source drops) for this bootstrap was ruled
+// impractical for the CI budget. There is no Windows CI leg; treat the
+// first real Windows compile as the review this file still needs.
+
+ARG_WITH("corvid", "path to the fetched corvid FFI artifacts (deps/current)", "no");
+
+if (PHP_CORVID == "no") {
+    // Default: deps/current next to the extension's parent directory.
+    var candidates = [
+        configure_module_dirname + "\\..\\..\\deps\\current",
+        "..\\..\\deps\\current"
+    ];
+    for (var i = 0; i < candidates.length; i++) {
+        if (FSO.FileExists(candidates[i] + "\\corvid.h")) {
+            PHP_CORVID = candidates[i];
+            break;
+        }
+    }
+    if (PHP_CORVID == "no") {
+        ERROR("corvid artifacts not found. Run fetch.ps1 in the repo root, " +
+              "or pass --with-corvid=<dir holding corvid.h + corvid.dll>");
+    }
+}
+
+if (PHP_CORVID != "no") {
+    if (!FSO.FileExists(PHP_CORVID + "\\corvid.h")) {
+        ERROR("corvid.h not found in " + PHP_CORVID);
+    }
+    if (!FSO.FileExists(PHP_CORVID + "\\corvid.dll")) {
+        ERROR("corvid.dll not found in " + PHP_CORVID);
+    }
+
+    // The release archive ships corvid.lib (the MSVC import library for
+    // corvid.dll); fetch.ps1 copies it into deps/current.
+    var corvid_lib = PHP_CORVID + "\\corvid.lib";
+    if (!FSO.FileExists(corvid_lib)) {
+        ERROR("corvid.lib (the import library) not found in " + PHP_CORVID);
+    }
+
+    EXTENSION("corvid", "corvid.c", null, "/I " + PHP_CORVID, corvid_lib);
+    AC_DEFINE("HAVE_CORVID", 1, "corvid FFI artifacts available");
+}
