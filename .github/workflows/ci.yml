@@ -1,0 +1,112 @@
+# ci — the PHP-consumer gate.
+#
+# Per platform × PHP line (docs/PLAN.md toolchain policy): fetch +
+# sha256-verify the pinned engine release artifacts, phpize-build the
+# extension against deps/current, run the golden-suite port (267
+# executable lines across 8 fixtures) through the extension's public PHP
+# API, and the examples tour (six runnable programs — quickstart,
+# hybrid, vector-index, text-search incl. CJK + phrase, graph, geo).
+# The NTS legs drive the suite via PHPUnit; a Linux ZTS leg (php:8.3-zts
+# container) runs the identical suite through the direct driver — the
+# threading posture of docs/PLAN.md (thread-local last-error read on
+# the failing call's thread) is executed, not asserted. The surface
+# gate resolves docs/SURFACE.tsv against the pinned engine tag, and
+# config.w32 gets its honest syntax check (node --check — see the
+# Windows note in README/PLAN: no Windows CI leg exists).
+#
+# Every leg is required-green.
+
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build-test:
+    name: ${{ matrix.os }} / php${{ matrix.php-version }} (nts)
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 12
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        php-version: ['8.4', '8.3']
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php-version }}
+          coverage: none
+
+      - name: Fetch + verify engine artifacts (sha256)
+        run: ./fetch.sh
+
+      - name: Build the extension (phpize against deps/current)
+        run: ./scripts/build-ext.sh
+
+      - name: PHPUnit version
+        run: php -v
+
+      - name: Golden suite (PHPUnit — 267 fixture lines through the binding)
+        run: |
+          curl -fsSL -o phpunit.phar https://phar.phpunit.de/phpunit-12.phar
+          php -d extension=ext/corvid/modules/corvid.so phpunit.phar
+
+      - name: Examples tour (six runnable programs, deterministic output)
+        run: |
+          for ex in quickstart hybrid vector_index text_search graph geo; do
+            echo "== examples/${ex}.php =="
+            php -d extension=ext/corvid/modules/corvid.so "examples/${ex}.php"
+          done
+
+  zts:
+    # ZTS leg (linux, php:8.3-zts): the identical golden suite + examples
+    # through the direct driver — the container ships no dom/mbstring for
+    # the PHPUnit phar, and this leg's job is the threaded build anyway.
+    name: linux / php8.3 (zts)
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    container: php:8.3-zts
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Fetch + verify engine artifacts (sha256)
+        run: ./fetch.sh
+
+      - name: Build the extension (phpize against deps/current)
+        run: ./scripts/build-ext.sh
+
+      - name: PHP version (thread-safety line)
+        run: php -v
+
+      - name: Golden suite (direct driver — 267 fixture lines through the binding)
+        run: php -d extension=ext/corvid/modules/corvid.so tests/run-golden.php
+
+      - name: Examples tour
+        run: |
+          for ex in quickstart hybrid vector_index text_search graph geo; do
+            echo "== examples/${ex}.php =="
+            php -d extension=ext/corvid/modules/corvid.so "examples/${ex}.php"
+          done
+
+  surface-gate:
+    # docs/SURFACE.tsv vs the engine's surface list at the PINNED tag:
+    # every engine construct mapped (binding api + proving test) or N/A
+    # with a reason; N/A count pinned to the committed baseline. The
+    # same job carries config.w32's honest syntax check (no Windows CI
+    # leg exists — README + docs/PLAN.md state exactly what is and is
+    # not verified).
+    name: surface gate + w32 syntax check
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - name: Resolve docs/SURFACE.tsv against the pinned engine surface
+        run: ./scripts/surface-gate.sh
+      - name: Syntax-check ext/corvid/config.w32
+        run: |
+          cp ext/corvid/config.w32 "$RUNNER_TEMP/config-w32-syntax.js"
+          node --check "$RUNNER_TEMP/config-w32-syntax.js"
+          echo "config.w32: JS syntax ok (NOT a Windows compile — see README)"
