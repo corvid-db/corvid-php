@@ -3163,7 +3163,13 @@ PHP_FUNCTION(corvid_ffi_version)
 /* ------------------------------------------------------------------ */
 
 static const zend_function_entry corvid_functions[] = {
+	/* ZEND_RAW_FENTRY grew two attribute-hook arguments in PHP 8.4 —
+	 * the floor is 8.3, so the arity is version-gated, not assumed. */
+#if PHP_VERSION_ID >= 80400
 	ZEND_RAW_FENTRY("Corvid\\ffiVersion", PHP_FN(corvid_ffi_version), arginfo_corvid_ffi_version, 0, NULL, NULL)
+#else
+	ZEND_RAW_FENTRY("Corvid\\ffiVersion", PHP_FN(corvid_ffi_version), arginfo_corvid_ffi_version, 0)
+#endif
 	PHP_FE_END
 };
 

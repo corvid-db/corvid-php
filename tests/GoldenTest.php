@@ -14,6 +14,7 @@ declare(strict_types=1);
 namespace CorvidTests;
 
 use CorvidGolden\Harness;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 final class GoldenTest extends TestCase
@@ -34,7 +35,7 @@ final class GoldenTest extends TestCase
         }
     }
 
-    /** @dataProvider fixtureProvider */
+    #[DataProvider('fixtureProvider')]
     public function testGoldenFixture(string $fixture): void
     {
         $h = new Harness();
