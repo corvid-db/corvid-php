@@ -137,10 +137,16 @@ ZTS) one process hosts many interpreter threads. The rulings:
   - A callback exception **never unwinds through C frames**: the
     trampoline catches it (`zend_clear_exception` after stashing the
     object), aborts/stops per the ABI's §1.6 contract, and the original
-    exception is re-thrown (for `scan`, as-is; for `update`, wrapped in a
-    `Corvid\Exception` carrying `CODE_ARGUMENT`, mirroring the ABI's
-    abort-fails-with-`CORVID_E_ARGUMENT` contract) once the engine call
-    has returned.
+    exception is re-thrown **verbatim** — for `scan` and `update`
+    alike, the exact object the callback threw (an earlier revision
+    wrapped update's in a `Corvid\Exception` carrying
+    `CODE_ARGUMENT`; the asymmetry was reviewed out — the engine's
+    abort status is its own bookkeeping, and what the caller sees is
+    the callback's own exception, whatever it is). Proven by
+    `tests/BindingTest.php` (marker exceptions surface as the same
+    object, the engine stays usable, an aborted update writes
+    nothing); the golden `UPDATE_ABORT` line stays `err:12` because
+    its harness callback throws `CorvidException(CODE_ARGUMENT)`.
   - The trampoline decodes the borrowed `current`/`doc` value inside the
     callback frame (copies at the boundary — nothing borrowed is retained
     past the callback's return), and encodes the callback's replacement
@@ -165,7 +171,7 @@ ZTS) one process hosts many interpreter threads. The rulings:
 | `Map` | PHP assoc array `["n" => 1]` | PHP assoc array |
 | `Vector` (f32s) | `Corvid\Vector` (holds an array of floats) | `Corvid\Vector` |
 
-The two rulings this table embodies:
+The rulings this table embodies:
 
 - **PHP has one string type and it is byte-opaque; the engine has Text and
   Bytes.** Plain `string` is **Text** (the common case; PHP strings carry
@@ -183,6 +189,16 @@ The two rulings this table embodies:
   honored through the constructor/`values()` pair; the wrapper exists so
   `[1.0, 0.0]` (an Array of two floats) and a 2-dim embedding can never
   collapse into each other — the golden fixtures pin both shapes.
+- **Container depth is capped at the engine's own bound.** The encode
+  recursion (PHP zval → `corvid_value`) enforces
+  `PHP_CORVID_MAX_NESTING = 128`, mirroring `corvid::value::MAX_NESTING`
+  (value.rs — the bound `Value::decode` applies to untrusted bytes): the
+  boundary is inclusive and accounted identically, so a 128-deep value
+  round-trips and a 129-deep one throws a clean
+  `Corvid\Exception(CODE_ARGUMENT)` at the call site. Without the cap a
+  deeply nested PHP array would recurse in C and smash the stack —
+  uncatchable from PHP; `tests/BindingTest.php` pins both sides of the
+  boundary.
 
 `Corvid\Values` exposes the value-family reads on this mapping —
 `type()`, `len()`, `asInt()` / `asFloat()` / `asBool()` / `asText()` /

@@ -141,8 +141,11 @@ final class Collection
     /**
      * Read-modify-write $key. The callable receives the current document
      * (null when absent) and returns the replacement (null deletes the
-     * key). A throwing callback aborts with CODE_ARGUMENT and writes
-     * nothing. No reentrant corvid calls from inside the callback (§1.6).
+     * key). A throwing callback aborts the write (nothing is written;
+     * the engine records its CODE_ARGUMENT abort status) and its
+     * exception is re-thrown VERBATIM after the engine call returns —
+     * the same contract as scan(). No reentrant corvid calls from
+     * inside the callback (§1.6).
      */
     public function update(string $key, callable $callback): void {}
 

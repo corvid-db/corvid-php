@@ -8,7 +8,7 @@ corvid::Value::Bytes	WHERE	MAPPED	the PHP value mapping (null/bool/int/float/str
 corvid::Value::Array	WHERE	MAPPED	the PHP value mapping (null/bool/int/float/string Text/Corvid\Bytes/Corvid\Vector/array/Map)	golden:values.txt:VTYPE
 corvid::Value::Map	WHERE	MAPPED	the PHP value mapping (null/bool/int/float/string Text/Corvid\Bytes/Corvid\Vector/array/Map)	golden:values.txt:VTYPE
 corvid::Value::Vector	WHERE	MAPPED	the PHP value mapping (null/bool/int/float/string Text/Corvid\Bytes/Corvid\Vector/array/Map)	golden:values.txt:VTYPE
-corvid::value::MAX_NESTING	Lifecycle	N/A	N/A	engine byte codec is dump/load internal machinery, not a binding API
+corvid::value::MAX_NESTING	Lifecycle	MAPPED	the encode recursion enforces the same inclusive 128 container-depth cap (PHP_CORVID_MAX_NESTING, mirroring value.rs); a deeper value throws a clean CODE_ARGUMENT instead of unbounded C recursion	BindingTest::testEncodingDeeperThanMaxNestingIsRejectedCleanly + testMaxNestingBoundaryRoundTrips
 corvid::Value::encode	Lifecycle	N/A	N/A	engine byte codec is dump/load internal machinery, not a binding API
 corvid::Value::decode	Lifecycle	N/A	N/A	engine byte codec is dump/load internal machinery, not a binding API
 corvid::Value::get	WHERE	N/A	N/A	nested-path reads are native array traversal over decoded documents
@@ -120,27 +120,27 @@ corvid::QueryBuilder::plan_shape	Lifecycle	N/A	N/A	plan/explain diagnostics excl
 corvid::QueryBuilder::explain	Lifecycle	N/A	N/A	plan/explain diagnostics excluded from the v1 ABI (FFI.md §9)
 corvid::QueryBuilder::run	SELECT shaping	MAPPED	Query->run()	golden:queries.txt:QVEC
 corvid::Db	Lifecycle	MAPPED	Corvid\Db	golden:admin.txt:FILEDB
-corvid::Db::open	Lifecycle	MAPPED	Db::open()/openMemory()/collection()/collections()/backup()/compact()/OpenMemory/Collection/Collections/Backup/Compact	golden:admin.txt (COLLECTIONS/BACKUP/COMPACT)
-corvid::Db::open_in_memory	Lifecycle	MAPPED	Db::open()/openMemory()/collection()/collections()/backup()/compact()/OpenMemory/Collection/Collections/Backup/Compact	golden:admin.txt (COLLECTIONS/BACKUP/COMPACT)
-corvid::Db::collection	Lifecycle	MAPPED	Db::open()/openMemory()/collection()/collections()/backup()/compact()/OpenMemory/Collection/Collections/Backup/Compact	golden:admin.txt (COLLECTIONS/BACKUP/COMPACT)
-corvid::Db::backup	Lifecycle	MAPPED	Db::open()/openMemory()/collection()/collections()/backup()/compact()/OpenMemory/Collection/Collections/Backup/Compact	golden:admin.txt (COLLECTIONS/BACKUP/COMPACT)
+corvid::Db::open	Lifecycle	MAPPED	Db::open(path) — file-backed	golden:admin.txt:FILEDB
+corvid::Db::open_in_memory	Lifecycle	MAPPED	Db::openMemory()	golden:mutations.txt (every non-values fixture opens via Db::openMemory())
+corvid::Db::collection	Lifecycle	MAPPED	Db->collection(name) -> Corvid\Collection	golden:admin.txt:COLL
+corvid::Db::backup	Lifecycle	MAPPED	Db->backup(path)	golden:admin.txt:BACKUP
 corvid::Db::bulk	Lifecycle	N/A	N/A	put_many covers the bulk fast path (FFI.md §9); Db::bulk not exposed
-corvid::Db::compact	Lifecycle	MAPPED	Db::open()/openMemory()/collection()/collections()/backup()/compact()/OpenMemory/Collection/Collections/Backup/Compact	golden:admin.txt (COLLECTIONS/BACKUP/COMPACT)
-corvid::Db::collections	Lifecycle	MAPPED	Db::open()/openMemory()/collection()/collections()/backup()/compact()/OpenMemory/Collection/Collections/Backup/Compact	golden:admin.txt (COLLECTIONS/BACKUP/COMPACT)
+corvid::Db::compact	Lifecycle	MAPPED	Db->compact()	golden:admin.txt:COMPACT
+corvid::Db::collections	Lifecycle	MAPPED	Db->collections() -> string[]	golden:admin.txt:COLLECTIONS
 corvid::Collection	Mutations	MAPPED	Collection	golden:mutations.txt:COLL
-corvid::Collection::insert	Mutations	MAPPED	Collection->insert()/Update/Patch/CompareAndSet	golden:mutations.txt (INSERT/UPDATE/PATCH/CAS)
-corvid::Collection::update	Mutations	MAPPED	Collection->insert()/Update/Patch/CompareAndSet	golden:mutations.txt (INSERT/UPDATE/PATCH/CAS)
-corvid::Collection::patch	Mutations	MAPPED	Collection->insert()/Update/Patch/CompareAndSet	golden:mutations.txt (INSERT/UPDATE/PATCH/CAS)
-corvid::Collection::compare_and_set	Mutations	MAPPED	Collection->insert()/Update/Patch/CompareAndSet	golden:mutations.txt (INSERT/UPDATE/PATCH/CAS)
+corvid::Collection::insert	Mutations	MAPPED	Collection->insert(key, doc)	golden:mutations.txt (INSERT/UPDATE/PATCH/CAS)
+corvid::Collection::update	Mutations	MAPPED	Collection->update(key, callable)	golden:mutations.txt (INSERT/UPDATE/PATCH/CAS)
+corvid::Collection::patch	Mutations	MAPPED	Collection->patch(key, patch)	golden:mutations.txt (INSERT/UPDATE/PATCH/CAS)
+corvid::Collection::compare_and_set	Mutations	MAPPED	Collection->compareAndSet(key, expected, replacement)	golden:mutations.txt (INSERT/UPDATE/PATCH/CAS)
 corvid::Collection::for_each_doc	SELECT shaping	MAPPED	Collection->scan(callable, early stop on false)	golden:mutations.txt:SCAN/SCAN_STOP
 corvid::Collection::len	SELECT shaping	MAPPED	Collection->len() (0 for empty)	golden:mutations.txt:LEN
 corvid::Collection::is_empty	SELECT shaping	MAPPED	Collection->len() (0 for empty)	golden:mutations.txt:LEN
 corvid::Collection::insert_batch	Mutations	MAPPED	Collection->putMany()	golden:mutations.txt:PUTMANY + golden:schema.txt:PUTMANY_ROLLBACK
 corvid::Collection::insert_auto	Mutations	MAPPED	Collection->insertAuto()	golden:mutations.txt:INSERT_AUTO
 corvid::Collection::get	SELECT shaping	MAPPED	Collection->get()	golden:mutations.txt:GET
-corvid::Collection::delete	Mutations	MAPPED	Collection->delete()/DeleteWhere/DeleteBatch	golden:mutations.txt (DELETE/DELETE_WHERE/DELETE_BATCH)
-corvid::Collection::delete_where	Mutations	MAPPED	Collection->delete()/DeleteWhere/DeleteBatch	golden:mutations.txt (DELETE/DELETE_WHERE/DELETE_BATCH)
-corvid::Collection::delete_batch	Mutations	MAPPED	Collection->delete()/DeleteWhere/DeleteBatch	golden:mutations.txt (DELETE/DELETE_WHERE/DELETE_BATCH)
+corvid::Collection::delete	Mutations	MAPPED	Collection->delete()/deleteWhere()/deleteBatch()	golden:mutations.txt (DELETE/DELETE_WHERE/DELETE_BATCH)
+corvid::Collection::delete_where	Mutations	MAPPED	Collection->delete()/deleteWhere()/deleteBatch()	golden:mutations.txt (DELETE/DELETE_WHERE/DELETE_BATCH)
+corvid::Collection::delete_batch	Mutations	MAPPED	Collection->delete()/deleteWhere()/deleteBatch()	golden:mutations.txt (DELETE/DELETE_WHERE/DELETE_BATCH)
 corvid::Collection::scan	SELECT shaping	MAPPED	Collection->scan()	golden:mutations.txt:SCAN
 corvid::Collection::page	SELECT shaping	MAPPED	Collection->page() -> Corvid\Page { rows, next }	golden:mutations.txt:PAGE
 corvid::Collection::page_where	SELECT shaping	N/A	N/A	filtered keyset pagination composes from filter+limit/offset (FFI.md §9 spec note)
@@ -184,7 +184,7 @@ corvid::store::ReadBatch::for_each	Lifecycle	N/A	N/A	engine low-level byte KV (S
 corvid::Hit	Vector search	MAPPED	Corvid\Row->score (Query->vector()->run())	golden:queries.txt:QVEC
 corvid::TextHit	Text search	MAPPED	Corvid\Row->score (Query->text()->run())	golden:queries.txt:QTEXT
 corvid::Collection::text_search	Text search	N/A	N/A	direct search fn not exposed: the query builder replaces it (Query.vector()/text(); FFI.md §9)
-corvid::Collection::phrase_search	Text search	MAPPED	(*Collection).PhraseSearch(field, phrase, k) — the direct positional search (corvid_phrase_search, v0.3.0) over the rows cursor	golden:queries.txt:PHRASE
+corvid::Collection::phrase_search	Text search	MAPPED	Collection->phraseSearch(field, phrase, k) — the direct positional search (corvid_phrase_search, v0.3.0) over the rows cursor	golden:queries.txt:PHRASE
 corvid::Collection::vector_search	Vector search	N/A	N/A	direct search fn not exposed: the query builder replaces it (Query.vector()/text(); FFI.md §9)
 corvid::text::Bm25Params	Text search	N/A	N/A	text-analysis internals; BM25 search is exposed via Query.text()
 corvid::text::Bm25Params::new	Text search	N/A	N/A	text-analysis internals; BM25 search is exposed via Query.text()
@@ -202,17 +202,17 @@ corvid::reciprocal_rank_fusion	Hybrid	N/A	N/A	internal fusion math; the binding 
 corvid::mmr	Hybrid	N/A	N/A	internal MMR math; the binding knob is rerankMmr (golden:queries.txt HYBRID)
 corvid::haversine_km	Geo	N/A	N/A	pure geo helper; distances surface as GeoHit distance_km (golden:geo.txt NEAREST)
 corvid::GeoHit	Geo	MAPPED	Corvid\GeoHit { key, doc, distanceKm }	golden:geo.txt:RADIUS/NEAREST/BBOX
-corvid::Collection::geo_within_radius	Geo	MAPPED	Collection->geoWithinRadius()/GeoNearest/GeoWithinBBox/CreateGeoIndex	golden:geo.txt (RADIUS/NEAREST/BBOX/IDX_GEO)
-corvid::Collection::geo_nearest	Geo	MAPPED	Collection->geoWithinRadius()/GeoNearest/GeoWithinBBox/CreateGeoIndex	golden:geo.txt (RADIUS/NEAREST/BBOX/IDX_GEO)
-corvid::Collection::geo_within_bbox	Geo	MAPPED	Collection->geoWithinRadius()/GeoNearest/GeoWithinBBox/CreateGeoIndex	golden:geo.txt (RADIUS/NEAREST/BBOX/IDX_GEO)
-corvid::Collection::create_geo_index	Schema (ALTER)	MAPPED	Collection->geoWithinRadius()/GeoNearest/GeoWithinBBox/CreateGeoIndex	golden:geo.txt (RADIUS/NEAREST/BBOX/IDX_GEO)
-corvid::Collection::link	Graph	MAPPED	Collection->link()/LinkWeighted/Unlink/Neighbors/InNeighbors/NeighborsWeighted/Traverse	golden:graph.txt
-corvid::Collection::link_weighted	Graph	MAPPED	Collection->link()/LinkWeighted/Unlink/Neighbors/InNeighbors/NeighborsWeighted/Traverse	golden:graph.txt
-corvid::Collection::neighbors_weighted	Graph	MAPPED	Collection->link()/LinkWeighted/Unlink/Neighbors/InNeighbors/NeighborsWeighted/Traverse	golden:graph.txt
-corvid::Collection::unlink	Graph	MAPPED	Collection->link()/LinkWeighted/Unlink/Neighbors/InNeighbors/NeighborsWeighted/Traverse	golden:graph.txt
-corvid::Collection::neighbors	Graph	MAPPED	Collection->link()/LinkWeighted/Unlink/Neighbors/InNeighbors/NeighborsWeighted/Traverse	golden:graph.txt
-corvid::Collection::in_neighbors	Graph	MAPPED	Collection->link()/LinkWeighted/Unlink/Neighbors/InNeighbors/NeighborsWeighted/Traverse	golden:graph.txt
-corvid::Collection::traverse	Graph	MAPPED	Collection->link()/LinkWeighted/Unlink/Neighbors/InNeighbors/NeighborsWeighted/Traverse	golden:graph.txt
+corvid::Collection::geo_within_radius	Geo	MAPPED	Collection->geoWithinRadius()/geoNearest()/geoWithinBBox()/createGeoIndex()	golden:geo.txt (RADIUS/NEAREST/BBOX/IDX_GEO)
+corvid::Collection::geo_nearest	Geo	MAPPED	Collection->geoWithinRadius()/geoNearest()/geoWithinBBox()/createGeoIndex()	golden:geo.txt (RADIUS/NEAREST/BBOX/IDX_GEO)
+corvid::Collection::geo_within_bbox	Geo	MAPPED	Collection->geoWithinRadius()/geoNearest()/geoWithinBBox()/createGeoIndex()	golden:geo.txt (RADIUS/NEAREST/BBOX/IDX_GEO)
+corvid::Collection::create_geo_index	Schema (ALTER)	MAPPED	Collection->geoWithinRadius()/geoNearest()/geoWithinBBox()/createGeoIndex()	golden:geo.txt (RADIUS/NEAREST/BBOX/IDX_GEO)
+corvid::Collection::link	Graph	MAPPED	Collection->link()/linkWeighted()/unlink()/neighbors()/inNeighbors()/neighborsWeighted()/traverse()	golden:graph.txt
+corvid::Collection::link_weighted	Graph	MAPPED	Collection->link()/linkWeighted()/unlink()/neighbors()/inNeighbors()/neighborsWeighted()/traverse()	golden:graph.txt
+corvid::Collection::neighbors_weighted	Graph	MAPPED	Collection->link()/linkWeighted()/unlink()/neighbors()/inNeighbors()/neighborsWeighted()/traverse()	golden:graph.txt
+corvid::Collection::unlink	Graph	MAPPED	Collection->link()/linkWeighted()/unlink()/neighbors()/inNeighbors()/neighborsWeighted()/traverse()	golden:graph.txt
+corvid::Collection::neighbors	Graph	MAPPED	Collection->link()/linkWeighted()/unlink()/neighbors()/inNeighbors()/neighborsWeighted()/traverse()	golden:graph.txt
+corvid::Collection::in_neighbors	Graph	MAPPED	Collection->link()/linkWeighted()/unlink()/neighbors()/inNeighbors()/neighborsWeighted()/traverse()	golden:graph.txt
+corvid::Collection::traverse	Graph	MAPPED	Collection->link()/linkWeighted()/unlink()/neighbors()/inNeighbors()/neighborsWeighted()/traverse()	golden:graph.txt
 corvid::JoinRow	Joins	N/A	N/A	joins are not in the v1 binding API (no FFI symbol)
 corvid::Collection::join	Joins	N/A	N/A	joins are not in the v1 binding API (no FFI symbol)
 corvid::hnsw::DEFAULT_M	Vector search	N/A	N/A	standalone Hnsw builder is engine-internal; v1 creates indexes via createVectorIndex* (golden:schema.txt IDX_VEC*)
@@ -226,16 +226,16 @@ corvid::Hnsw::len	Vector search	N/A	N/A	standalone Hnsw builder is engine-intern
 corvid::Hnsw::is_empty	Vector search	N/A	N/A	standalone Hnsw builder is engine-internal; v1 creates indexes via createVectorIndex* (golden:schema.txt IDX_VEC*)
 corvid::Hnsw::insert	Vector search	N/A	N/A	standalone Hnsw builder is engine-internal; v1 creates indexes via createVectorIndex* (golden:schema.txt IDX_VEC*)
 corvid::Hnsw::search	Vector search	N/A	N/A	standalone Hnsw builder is engine-internal; v1 creates indexes via createVectorIndex* (golden:schema.txt IDX_VEC*)
-corvid::Collection::create_vector_index	Schema (ALTER)	MAPPED	Collection->createScalarIndex()/createCompoundIndex(...)/createTextIndex[/OnDisk]()/createGeoIndex()/createVectorIndex* (6 variants)	golden:schema.txt:IDX_*
-corvid::Collection::create_vector_index_quantized	Schema (ALTER)	MAPPED	Collection->createScalarIndex()/createCompoundIndex(...)/createTextIndex[/OnDisk]()/createGeoIndex()/createVectorIndex* (6 variants)	golden:schema.txt:IDX_*
-corvid::Collection::create_vector_index_ondisk	Schema (ALTER)	MAPPED	Collection->createScalarIndex()/createCompoundIndex(...)/createTextIndex[/OnDisk]()/createGeoIndex()/createVectorIndex* (6 variants)	golden:schema.txt:IDX_*
-corvid::Collection::create_vector_index_ondisk_quantized	Schema (ALTER)	MAPPED	Collection->createScalarIndex()/createCompoundIndex(...)/createTextIndex[/OnDisk]()/createGeoIndex()/createVectorIndex* (6 variants)	golden:schema.txt:IDX_*
-corvid::Collection::create_vector_index_ondisk_pq	Schema (ALTER)	MAPPED	Collection->createScalarIndex()/createCompoundIndex(...)/createTextIndex[/OnDisk]()/createGeoIndex()/createVectorIndex* (6 variants)	golden:schema.txt:IDX_*
-corvid::Collection::create_vector_index_pq	Schema (ALTER)	MAPPED	Collection->createScalarIndex()/createCompoundIndex(...)/createTextIndex[/OnDisk]()/createGeoIndex()/createVectorIndex* (6 variants)	golden:schema.txt:IDX_*
-corvid::Collection::create_text_index	Schema (ALTER)	MAPPED	Collection->createScalarIndex()/createCompoundIndex(...)/createTextIndex[/OnDisk]()/createGeoIndex()/createVectorIndex* (6 variants)	golden:schema.txt:IDX_*
-corvid::Collection::create_text_index_ondisk	Schema (ALTER)	MAPPED	Collection->createScalarIndex()/createCompoundIndex(...)/createTextIndex[/OnDisk]()/createGeoIndex()/createVectorIndex* (6 variants)	golden:schema.txt:IDX_*
-corvid::Collection::create_scalar_index	Schema (ALTER)	MAPPED	Collection->createScalarIndex()/createCompoundIndex(...)/createTextIndex[/OnDisk]()/createGeoIndex()/createVectorIndex* (6 variants)	golden:schema.txt:IDX_*
-corvid::Collection::create_compound_index	Schema (ALTER)	MAPPED	Collection->createScalarIndex()/createCompoundIndex(...)/createTextIndex[/OnDisk]()/createGeoIndex()/createVectorIndex* (6 variants)	golden:schema.txt:IDX_*
+corvid::Collection::create_vector_index	Schema (ALTER)	MAPPED	Collection->createScalarIndex()/createCompoundIndex(...)/createTextIndex()/createTextIndexOnDisk()/createGeoIndex()/createVectorIndex* (6 variants)	golden:schema.txt:IDX_*
+corvid::Collection::create_vector_index_quantized	Schema (ALTER)	MAPPED	Collection->createScalarIndex()/createCompoundIndex(...)/createTextIndex()/createTextIndexOnDisk()/createGeoIndex()/createVectorIndex* (6 variants)	golden:schema.txt:IDX_*
+corvid::Collection::create_vector_index_ondisk	Schema (ALTER)	MAPPED	Collection->createScalarIndex()/createCompoundIndex(...)/createTextIndex()/createTextIndexOnDisk()/createGeoIndex()/createVectorIndex* (6 variants)	golden:schema.txt:IDX_*
+corvid::Collection::create_vector_index_ondisk_quantized	Schema (ALTER)	MAPPED	Collection->createScalarIndex()/createCompoundIndex(...)/createTextIndex()/createTextIndexOnDisk()/createGeoIndex()/createVectorIndex* (6 variants)	golden:schema.txt:IDX_*
+corvid::Collection::create_vector_index_ondisk_pq	Schema (ALTER)	MAPPED	Collection->createScalarIndex()/createCompoundIndex(...)/createTextIndex()/createTextIndexOnDisk()/createGeoIndex()/createVectorIndex* (6 variants)	golden:schema.txt:IDX_*
+corvid::Collection::create_vector_index_pq	Schema (ALTER)	MAPPED	Collection->createScalarIndex()/createCompoundIndex(...)/createTextIndex()/createTextIndexOnDisk()/createGeoIndex()/createVectorIndex* (6 variants)	golden:schema.txt:IDX_*
+corvid::Collection::create_text_index	Schema (ALTER)	MAPPED	Collection->createScalarIndex()/createCompoundIndex(...)/createTextIndex()/createTextIndexOnDisk()/createGeoIndex()/createVectorIndex* (6 variants)	golden:schema.txt:IDX_*
+corvid::Collection::create_text_index_ondisk	Schema (ALTER)	MAPPED	Collection->createScalarIndex()/createCompoundIndex(...)/createTextIndex()/createTextIndexOnDisk()/createGeoIndex()/createVectorIndex* (6 variants)	golden:schema.txt:IDX_*
+corvid::Collection::create_scalar_index	Schema (ALTER)	MAPPED	Collection->createScalarIndex()/createCompoundIndex(...)/createTextIndex()/createTextIndexOnDisk()/createGeoIndex()/createVectorIndex* (6 variants)	golden:schema.txt:IDX_*
+corvid::Collection::create_compound_index	Schema (ALTER)	MAPPED	Collection->createScalarIndex()/createCompoundIndex(...)/createTextIndex()/createTextIndexOnDisk()/createGeoIndex()/createVectorIndex* (6 variants)	golden:schema.txt:IDX_*
 corvid::schema::FieldType	Schema (ALTER)	MAPPED	Corvid\FieldDef::TYPE_* constants (0..8, frozen ABI values)	golden:schema.txt:SET_SCHEMA/SCHEMA
 corvid::schema::FieldType::Any	Schema (ALTER)	MAPPED	Corvid\FieldDef::TYPE_* constants (0..8, frozen ABI values)	golden:schema.txt:SET_SCHEMA/SCHEMA
 corvid::schema::FieldType::Bool	Schema (ALTER)	MAPPED	Corvid\FieldDef::TYPE_* constants (0..8, frozen ABI values)	golden:schema.txt:SET_SCHEMA/SCHEMA

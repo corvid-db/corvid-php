@@ -175,7 +175,19 @@ static bool php_corvid_utf8_valid(const char *s, size_t len)
 /* value mapping: PHP zval → corvid_value (encode; throws, NULL=fail)   */
 /* ------------------------------------------------------------------ */
 
-static corvid_value *php_corvid_encode(zval *val);
+/* Container-depth cap for the encode recursion. Mirrors the engine's
+ * corvid::value::MAX_NESTING (crates/corvid/src/value.rs: "Maximum
+ * container nesting accepted by Value::decode ... bounds recursion so a
+ * crafted payload errors instead of overflowing the stack"). Without it,
+ * a deeply nested PHP array would recurse through php_corvid_encode/
+ * _encode_array in C and smash the stack — uncatchable from PHP. The
+ * boundary is inclusive, accounted exactly like the engine's decoder
+ * (the top-level value sits at depth 0; each array/map child descends
+ * one): a 128-deep value encodes, a 129-deep one throws a clean
+ * CorvidException (CORVID_E_ARGUMENT) instead. */
+#define PHP_CORVID_MAX_NESTING 128
+
+static corvid_value *php_corvid_encode(zval *val, uint32_t depth);
 
 static float *php_corvid_floats_from_array(zval *val, size_t *dim_out) /* throws; NULL=fail */
 {
@@ -202,7 +214,7 @@ static float *php_corvid_floats_from_array(zval *val, size_t *dim_out) /* throws
 	return buf;
 }
 
-static corvid_value *php_corvid_encode_array(zval *val)
+static corvid_value *php_corvid_encode_array(zval *val, uint32_t depth)
 {
 	HashTable    *ht = Z_ARRVAL_P(val);
 	corvid_value *out;
@@ -230,7 +242,7 @@ static corvid_value *php_corvid_encode_array(zval *val)
 		zval *item;
 		out = corvid_value_array_new();
 		ZEND_HASH_FOREACH_VAL(ht, item) {
-			corvid_value *v = php_corvid_encode(item);
+			corvid_value *v = php_corvid_encode(item, depth + 1);
 			if (v == NULL) { corvid_value_free(out); return NULL; }
 			corvid_value_array_push(out, v); /* consumes v unconditionally (§8) */
 		} ZEND_HASH_FOREACH_END();
@@ -244,7 +256,7 @@ static corvid_value *php_corvid_encode_array(zval *val)
 		out = corvid_value_map_new();
 		ZEND_HASH_FOREACH_KEY_VAL(ht, idx, key, item) {
 			zend_string  *kcopy;
-			corvid_value *v = php_corvid_encode(item);
+			corvid_value *v = php_corvid_encode(item, depth + 1);
 
 			if (v == NULL) { corvid_value_free(out); return NULL; }
 			if (key != NULL) {
@@ -265,8 +277,13 @@ static corvid_value *php_corvid_encode_array(zval *val)
 	return out;
 }
 
-static corvid_value *php_corvid_encode(zval *val)
+static corvid_value *php_corvid_encode(zval *val, uint32_t depth)
 {
+	if (depth > PHP_CORVID_MAX_NESTING) {
+		php_corvid_throw_arg("value nests deeper than %d (corvid::value::MAX_NESTING)",
+			(int)PHP_CORVID_MAX_NESTING);
+		return NULL;
+	}
 	switch (Z_TYPE_P(val)) {
 		case IS_NULL:   return corvid_value_null();
 		case IS_TRUE:   return corvid_value_bool(1);
@@ -281,7 +298,7 @@ static corvid_value *php_corvid_encode(zval *val)
 			return corvid_value_text(Z_STRVAL_P(val), Z_STRLEN_P(val));
 		}
 		case IS_ARRAY:
-			return php_corvid_encode_array(val);
+			return php_corvid_encode_array(val, depth);
 		case IS_OBJECT: {
 			if (instanceof_function(Z_OBJCE_P(val), corvid_bytes_ce)) {
 				zval tmp, *pz;
@@ -533,7 +550,7 @@ static void php_corvid_cb_free(php_corvid_cb *cb)
 	}
 }
 
-/* Re-throw the stashed exception as-is (the scan contract). */
+/* Re-throw the stashed exception as-is (the update/scan contract). */
 static void php_corvid_cb_rethrow(php_corvid_cb *cb)
 {
 	zval ex;
@@ -566,7 +583,7 @@ static corvid_status php_corvid_update_cb(void *ctx, const corvid_value *current
 	} else if (Z_TYPE(retval) == IS_NULL) {
 		*out = NULL;    /* null replacement = delete the key */
 	} else {
-		corvid_value *v = php_corvid_encode(&retval);
+		corvid_value *v = php_corvid_encode(&retval, 0);
 		if (v == NULL) {
 			php_corvid_cb_stash_exception(cb); /* encode threw */
 			st = CORVID_ERR;
@@ -983,6 +1000,7 @@ PHP_METHOD(Corvid_Db, loadWithRenames)
 	size_t         n, i = 0;
 	const char   **olds, **news;
 	size_t        *old_lens, *new_lens;
+	zend_string  **news_z; /* keeps the coerced targets alive across the ABI call */
 	zend_string   *k;
 	zval          *v;
 
@@ -994,23 +1012,27 @@ PHP_METHOD(Corvid_Db, loadWithRenames)
 	php_corvid_check_db(dbo);
 	if (EG(exception)) { RETURN_THROWS(); }
 
-	n = zend_hash_num_elements(map);
+	n       = zend_hash_num_elements(map);
 	olds     = safe_emalloc(sizeof(char *), (n ? n : 1), 0);
 	news     = safe_emalloc(sizeof(char *), (n ? n : 1), 0);
 	old_lens = safe_emalloc(sizeof(size_t), (n ? n : 1), 0);
 	new_lens = safe_emalloc(sizeof(size_t), (n ? n : 1), 0);
+	news_z   = safe_emalloc(sizeof(zend_string *), (n ? n : 1), 0);
 
 	ZEND_HASH_FOREACH_STR_KEY_VAL(map, k, v) {
+		/* zval_get_string allocates a FRESH string for non-string
+		 * values (int/float/...); its bytes must outlive this loop —
+		 * release only after the engine call has returned. */
 		zend_string *nv = zval_get_string(v);
 		if (k == NULL) {
 			php_corvid_throw_arg("renames map keys must be strings");
 			zend_string_release(nv);
 			goto cleanup;
 		}
-		olds[i] = ZSTR_VAL(k);  old_lens[i] = ZSTR_LEN(k);
-		news[i] = ZSTR_VAL(nv); new_lens[i] = ZSTR_LEN(nv);
+		olds[i]   = ZSTR_VAL(k);   old_lens[i] = ZSTR_LEN(k);
+		news_z[i] = nv;
+		news[i]   = ZSTR_VAL(nv);  new_lens[i] = ZSTR_LEN(nv);
 		i++;
-		zend_string_release(nv);
 	} ZEND_HASH_FOREACH_END();
 
 	if (corvid_load_from_path_with_renames(dbo->handle,
@@ -1021,7 +1043,8 @@ PHP_METHOD(Corvid_Db, loadWithRenames)
 	}
 
 cleanup:
-	efree(olds); efree(news); efree(old_lens); efree(new_lens);
+	for (size_t j = 0; j < i; j++) { zend_string_release(news_z[j]); }
+	efree(olds); efree(news); efree(old_lens); efree(new_lens); efree(news_z);
 }
 
 PHP_METHOD(Corvid_Db, backup)
@@ -1102,7 +1125,7 @@ PHP_METHOD(Corvid_Collection, insert)
 
 	php_corvid_check_coll(co);
 	if (EG(exception)) { RETURN_THROWS(); }
-	v = php_corvid_encode(doc);
+	v = php_corvid_encode(doc, 0);
 	if (v == NULL) { RETURN_THROWS(); }
 	if (corvid_insert(co->handle, (const uint8_t *)ZSTR_VAL(key), ZSTR_LEN(key), v) != CORVID_OK) {
 		php_corvid_throw_last("corvid_insert failed");
@@ -1131,9 +1154,10 @@ PHP_METHOD(Corvid_Collection, putMany)
 	items = safe_emalloc(sizeof(corvid_kv), (n ? n : 1), 0);
 
 	ZEND_HASH_FOREACH_STR_KEY_VAL(docs, k, v) {
-		corvid_value *cv = php_corvid_encode(v);
+		corvid_value *cv = php_corvid_encode(v, 0);
 		if (cv == NULL) { goto cleanup; }
 		if (k == NULL) {
+			corvid_value_free(cv); /* ours until consumed — not the leak's */
 			php_corvid_throw_arg("putMany wants a key => document map (string keys)");
 			goto cleanup;
 		}
@@ -1167,7 +1191,7 @@ PHP_METHOD(Corvid_Collection, insertAuto)
 
 	php_corvid_check_coll(co);
 	if (EG(exception)) { RETURN_THROWS(); }
-	v = php_corvid_encode(doc);
+	v = php_corvid_encode(doc, 0);
 	if (v == NULL) { RETURN_THROWS(); }
 	key = corvid_insert_auto(co->handle, v, &klen);
 	corvid_value_free(v);
@@ -1200,16 +1224,11 @@ PHP_METHOD(Corvid_Collection, update)
 		php_corvid_update_cb, &cb);
 
 	if (!Z_ISUNDEF(cb.exception)) {
-		zval rv;
-		/* The aborting-callback contract (§1.6/§4.8): the engine records
-		 * CORVID_E_ARGUMENT; mirror the Go binding — surface a
-		 * CorvidException with that code, carrying the callback's own
-		 * message. */
-		zend_string *msg = zval_get_string(zend_read_property(zend_ce_exception,
-			Z_OBJ(cb.exception), "message", sizeof("message") - 1, 0, &rv));
-		zend_throw_exception_ex(corvid_exception_ce, (zend_long)CORVID_E_ARGUMENT,
-			"update callback aborted: %s", ZSTR_VAL(msg));
-		zend_string_release(msg);
+		/* The aborting-callback contract (§1.6), ruled symmetric with
+		 * scan: the engine recorded CORVID_E_ARGUMENT (its abort
+		 * status) and wrote nothing — what surfaces at the call site
+		 * is the callback's OWN exception, verbatim. */
+		php_corvid_cb_rethrow(&cb);
 		php_corvid_cb_free(&cb);
 		RETURN_THROWS();
 	}
@@ -1234,7 +1253,7 @@ PHP_METHOD(Corvid_Collection, patch)
 
 	php_corvid_check_coll(co);
 	if (EG(exception)) { RETURN_THROWS(); }
-	v = php_corvid_encode(patch);
+	v = php_corvid_encode(patch, 0);
 	if (v == NULL) { RETURN_THROWS(); }
 	if (corvid_patch(co->handle, (const uint8_t *)ZSTR_VAL(key), ZSTR_LEN(key), v) != CORVID_OK) {
 		php_corvid_throw_last("corvid_patch failed");
@@ -1260,11 +1279,11 @@ PHP_METHOD(Corvid_Collection, compareAndSet)
 	php_corvid_check_coll(co);
 	if (EG(exception)) { RETURN_THROWS(); }
 	if (Z_TYPE_P(expected) != IS_NULL) {
-		ex = php_corvid_encode(expected);
+		ex = php_corvid_encode(expected, 0);
 		if (ex == NULL) { RETURN_THROWS(); }
 	}
 	if (Z_TYPE_P(replacement) != IS_NULL) {
-		re = php_corvid_encode(replacement);
+		re = php_corvid_encode(replacement, 0);
 		if (re == NULL) { if (ex) corvid_value_free(ex); RETURN_THROWS(); }
 	}
 	if (corvid_compare_and_set(co->handle, (const uint8_t *)ZSTR_VAL(key), ZSTR_LEN(key),
@@ -1331,6 +1350,9 @@ PHP_METHOD(Corvid_Collection, deleteBatch)
 	zval            *args;
 	uint32_t         argc, i;
 	size_t           removed = 0;
+	const uint8_t  **keys;
+	size_t          *key_lens;
+	zend_string    **keys_z; /* keeps the coerced keys alive across the ABI call */
 
 	ZEND_PARSE_PARAMETERS_START(1, -1)
 		Z_PARAM_VARIADIC('*', args, argc)
@@ -1339,21 +1361,24 @@ PHP_METHOD(Corvid_Collection, deleteBatch)
 	php_corvid_check_coll(co);
 	if (EG(exception)) { RETURN_THROWS(); }
 
-	const uint8_t **keys    = safe_emalloc(sizeof(uint8_t *), (argc ? argc : 1), 0);
-	size_t         *key_lens = safe_emalloc(sizeof(size_t), (argc ? argc : 1), 0);
+	keys     = safe_emalloc(sizeof(uint8_t *), (argc ? argc : 1), 0);
+	key_lens = safe_emalloc(sizeof(size_t), (argc ? argc : 1), 0);
+	keys_z   = safe_emalloc(sizeof(zend_string *), (argc ? argc : 1), 0);
 
 	for (i = 0; i < argc; i++) {
-		zend_string *k = zval_get_string(&args[i]);
-		keys[i]     = (const uint8_t *)ZSTR_VAL(k);
-		key_lens[i] = ZSTR_LEN(k);
-		zend_string_release(k);
+		/* zval_get_string allocates a FRESH string for non-string args
+		 * (int/float keys above 9 especially); release only after the
+		 * engine call has returned — not inside this loop. */
+		keys_z[i]   = zval_get_string(&args[i]);
+		keys[i]     = (const uint8_t *)ZSTR_VAL(keys_z[i]);
+		key_lens[i] = ZSTR_LEN(keys_z[i]);
 	}
 	if (corvid_delete_batch(co->handle, (const uint8_t *const *)keys, key_lens, argc, &removed) != CORVID_OK) {
 		php_corvid_throw_last("corvid_delete_batch failed");
-		efree(keys); efree(key_lens);
-		RETURN_THROWS();
 	}
-	efree(keys); efree(key_lens);
+	for (i = 0; i < argc; i++) { zend_string_release(keys_z[i]); }
+	efree(keys); efree(key_lens); efree(keys_z);
+	if (EG(exception)) { RETURN_THROWS(); }
 	RETURN_LONG((zend_long)removed);
 }
 
@@ -1373,7 +1398,7 @@ PHP_METHOD(Corvid_Collection, insertWithTtl)
 
 	php_corvid_check_coll(co);
 	if (EG(exception)) { RETURN_THROWS(); }
-	v = php_corvid_encode(doc);
+	v = php_corvid_encode(doc, 0);
 	if (v == NULL) { RETURN_THROWS(); }
 	if (corvid_insert_with_ttl(co->handle, (const uint8_t *)ZSTR_VAL(key), ZSTR_LEN(key), v,
 	        (int64_t)expiresAt) != CORVID_OK) {
@@ -1951,6 +1976,7 @@ PHP_METHOD(Corvid_Collection, createCompoundIndex)
 	uint32_t         argc, i;
 	const char     **fields;
 	size_t          *lens;
+	zend_string    **fields_z; /* keeps the coerced names alive across the ABI call */
 
 	ZEND_PARSE_PARAMETERS_START(1, -1)
 		Z_PARAM_VARIADIC('*', args, argc)
@@ -1959,20 +1985,21 @@ PHP_METHOD(Corvid_Collection, createCompoundIndex)
 	php_corvid_check_coll(co);
 	if (EG(exception)) { RETURN_THROWS(); }
 
-	fields = safe_emalloc(sizeof(char *), (argc ? argc : 1), 0);
-	lens   = safe_emalloc(sizeof(size_t), (argc ? argc : 1), 0);
+	fields   = safe_emalloc(sizeof(char *), (argc ? argc : 1), 0);
+	lens     = safe_emalloc(sizeof(size_t), (argc ? argc : 1), 0);
+	fields_z = safe_emalloc(sizeof(zend_string *), (argc ? argc : 1), 0);
 	for (i = 0; i < argc; i++) {
-		zend_string *f = zval_get_string(&args[i]);
-		fields[i] = ZSTR_VAL(f);
-		lens[i]   = ZSTR_LEN(f);
-		zend_string_release(f);
+		/* fresh zend_strings for non-string args — released after the call */
+		fields_z[i] = zval_get_string(&args[i]);
+		fields[i]   = ZSTR_VAL(fields_z[i]);
+		lens[i]     = ZSTR_LEN(fields_z[i]);
 	}
 	if (corvid_create_compound_index(co->handle, (const char *const *)fields, lens, argc) != CORVID_OK) {
 		php_corvid_throw_last("corvid_create_compound_index failed");
-		efree(fields); efree(lens);
-		RETURN_THROWS();
 	}
-	efree(fields); efree(lens);
+	for (i = 0; i < argc; i++) { zend_string_release(fields_z[i]); }
+	efree(fields); efree(lens); efree(fields_z);
+	if (EG(exception)) { RETURN_THROWS(); }
 }
 
 PHP_METHOD(Corvid_Collection, createTextIndex)
@@ -2060,6 +2087,7 @@ PHP_METHOD(Corvid_Collection, setSchema)
 			zend_long r, u;
 
 			if (t < 0 || t > 8) {
+				zend_string_release(names[i]); /* captured this iteration; i was not yet bumped */
 				php_corvid_throw_arg("field type must be one of Corvid\\FieldDef::TYPE_* (0..8)");
 				goto cleanup;
 			}
@@ -2345,10 +2373,11 @@ PHP_METHOD(Corvid_Query, orderBy)
 PHP_METHOD(Corvid_Query, select)
 {
 	php_corvid_query *q = Z_CORVID_QUERY_P(ZEND_THIS);
-	zval            *args;
-	uint32_t         argc, i;
-	const char     **fields;
-	size_t          *lens;
+	zval             *args;
+	uint32_t          argc, i;
+	const char      **fields;
+	size_t           *lens;
+	zend_string     **fields_z; /* keeps the coerced names alive across the ABI call */
 
 	ZEND_PARSE_PARAMETERS_START(1, -1)
 		Z_PARAM_VARIADIC('*', args, argc)
@@ -2357,20 +2386,21 @@ PHP_METHOD(Corvid_Query, select)
 	php_corvid_check_query(q);
 	if (EG(exception)) { RETURN_THROWS(); }
 
-	fields = safe_emalloc(sizeof(char *), (argc ? argc : 1), 0);
-	lens   = safe_emalloc(sizeof(size_t), (argc ? argc : 1), 0);
+	fields   = safe_emalloc(sizeof(char *), (argc ? argc : 1), 0);
+	lens     = safe_emalloc(sizeof(size_t), (argc ? argc : 1), 0);
+	fields_z = safe_emalloc(sizeof(zend_string *), (argc ? argc : 1), 0);
 	for (i = 0; i < argc; i++) {
-		zend_string *f = zval_get_string(&args[i]);
-		fields[i] = ZSTR_VAL(f);
-		lens[i]   = ZSTR_LEN(f);
-		zend_string_release(f);
+		/* fresh zend_strings for non-string args — released after the call */
+		fields_z[i] = zval_get_string(&args[i]);
+		fields[i]   = ZSTR_VAL(fields_z[i]);
+		lens[i]     = ZSTR_LEN(fields_z[i]);
 	}
 	if (corvid_query_select(q->handle, (const char *const *)fields, lens, argc) != CORVID_OK) {
 		php_corvid_throw_last("corvid_query_select failed");
-		efree(fields); efree(lens);
-		RETURN_THROWS();
 	}
-	efree(fields); efree(lens);
+	for (i = 0; i < argc; i++) { zend_string_release(fields_z[i]); }
+	efree(fields); efree(lens); efree(fields_z);
+	if (EG(exception)) { RETURN_THROWS(); }
 	RETURN_ZVAL(ZEND_THIS, 1, 0);
 }
 
@@ -2582,7 +2612,7 @@ PHP_METHOD(Corvid_Field, mname) \
 	\
 	ZEND_PARSE_PARAMETERS_START(1, 1) Z_PARAM_ZVAL(value) ZEND_PARSE_PARAMETERS_END(); \
 	path = php_corvid_field_path(ZEND_THIS); \
-	v = php_corvid_encode(value); \
+	v = php_corvid_encode(value, 0); \
 	if (v == NULL) { zend_string_release(path); RETURN_THROWS(); } \
 	p = corvid_pred_compare(ZSTR_VAL(path), ZSTR_LEN(path), op, v); \
 	corvid_value_free(v); /* cloned into the tree */ \
@@ -2623,7 +2653,7 @@ PHP_METHOD(Corvid_Field, in)
 	path = php_corvid_field_path(ZEND_THIS);
 	vals = safe_emalloc(sizeof(corvid_value *), (argc ? argc : 1), 0);
 	for (i = 0; i < argc; i++) {
-		vals[i] = php_corvid_encode(&args[i]);
+		vals[i] = php_corvid_encode(&args[i], 0);
 		if (vals[i] == NULL) {
 			while (i > 0) corvid_value_free(vals[--i]);
 			efree(vals); zend_string_release(path);
@@ -2651,9 +2681,9 @@ PHP_METHOD(Corvid_Field, between)
 	ZEND_PARSE_PARAMETERS_END();
 
 	path = php_corvid_field_path(ZEND_THIS);
-	lo = php_corvid_encode(low);
+	lo = php_corvid_encode(low, 0);
 	if (lo == NULL) { zend_string_release(path); RETURN_THROWS(); }
-	hi = php_corvid_encode(high);
+	hi = php_corvid_encode(high, 0);
 	if (hi == NULL) { corvid_value_free(lo); zend_string_release(path); RETURN_THROWS(); }
 	p = corvid_pred_between(ZSTR_VAL(path), ZSTR_LEN(path), lo, hi);
 	corvid_value_free(lo); corvid_value_free(hi); /* cloned */
@@ -2855,7 +2885,7 @@ PHP_METHOD(Corvid_Values, type)
 		Z_PARAM_ZVAL(value)
 	ZEND_PARSE_PARAMETERS_END();
 
-	v = php_corvid_encode(value);
+	v = php_corvid_encode(value, 0);
 	if (v == NULL) { RETURN_THROWS(); }
 	t = corvid_value_type(v);
 	corvid_value_free(v);
@@ -2876,7 +2906,7 @@ PHP_METHOD(Corvid_Values, len)
 		Z_PARAM_ZVAL(value)
 	ZEND_PARSE_PARAMETERS_END();
 
-	v = php_corvid_encode(value);
+	v = php_corvid_encode(value, 0);
 	if (v == NULL) { RETURN_THROWS(); }
 	n = corvid_value_len(v);
 	corvid_value_free(v);
@@ -2894,7 +2924,7 @@ PHP_METHOD(Corvid_Values, asInt)
 		Z_PARAM_ZVAL(value)
 	ZEND_PARSE_PARAMETERS_END();
 
-	v = php_corvid_encode(value);
+	v = php_corvid_encode(value, 0);
 	if (v == NULL) { RETURN_THROWS(); }
 	got = corvid_value_as_int(v, &ok);
 	corvid_value_free(v);
@@ -2913,7 +2943,7 @@ PHP_METHOD(Corvid_Values, asFloat)
 		Z_PARAM_ZVAL(value)
 	ZEND_PARSE_PARAMETERS_END();
 
-	v = php_corvid_encode(value);
+	v = php_corvid_encode(value, 0);
 	if (v == NULL) { RETURN_THROWS(); }
 	got = corvid_value_as_float(v, &ok);
 	corvid_value_free(v);
@@ -2931,7 +2961,7 @@ PHP_METHOD(Corvid_Values, asBool)
 		Z_PARAM_ZVAL(value)
 	ZEND_PARSE_PARAMETERS_END();
 
-	v = php_corvid_encode(value);
+	v = php_corvid_encode(value, 0);
 	if (v == NULL) { RETURN_THROWS(); }
 	got = corvid_value_as_bool(v, &ok);
 	corvid_value_free(v);
@@ -2950,7 +2980,7 @@ PHP_METHOD(Corvid_Values, asText)
 		Z_PARAM_ZVAL(value)
 	ZEND_PARSE_PARAMETERS_END();
 
-	v = php_corvid_encode(value);
+	v = php_corvid_encode(value, 0);
 	if (v == NULL) { RETURN_THROWS(); }
 	s = corvid_value_text_ref(v, &len);
 	if (s == NULL) {
@@ -2972,7 +3002,7 @@ PHP_METHOD(Corvid_Values, asBytes)
 		Z_PARAM_ZVAL(value)
 	ZEND_PARSE_PARAMETERS_END();
 
-	v = php_corvid_encode(value);
+	v = php_corvid_encode(value, 0);
 	if (v == NULL) { RETURN_THROWS(); }
 	b = corvid_value_bytes_ref(v, &len);
 	if (b == NULL) {
@@ -3000,7 +3030,7 @@ PHP_METHOD(Corvid_Values, asVector)
 		Z_PARAM_ZVAL(value)
 	ZEND_PARSE_PARAMETERS_END();
 
-	v = php_corvid_encode(value);
+	v = php_corvid_encode(value, 0);
 	if (v == NULL) { RETURN_THROWS(); }
 	f = corvid_value_vector_ref(v, &dim);
 	if (f == NULL) {
@@ -3032,7 +3062,7 @@ PHP_METHOD(Corvid_Values, mapKeys)
 		Z_PARAM_ZVAL(value)
 	ZEND_PARSE_PARAMETERS_END();
 
-	v = php_corvid_encode(value);
+	v = php_corvid_encode(value, 0);
 	if (v == NULL) { RETURN_THROWS(); }
 	keys = corvid_value_map_keys(v);
 	corvid_value_free(v);
@@ -3052,7 +3082,7 @@ PHP_METHOD(Corvid_Values, clone)
 		Z_PARAM_ZVAL(value)
 	ZEND_PARSE_PARAMETERS_END();
 
-	v = php_corvid_encode(value);
+	v = php_corvid_encode(value, 0);
 	if (v == NULL) { RETURN_THROWS(); }
 	c = corvid_value_clone(v);
 	corvid_value_free(v);
@@ -3075,9 +3105,9 @@ PHP_METHOD(Corvid_Values, push)
 		Z_PARAM_ZVAL(item)
 	ZEND_PARSE_PARAMETERS_END();
 
-	arr = php_corvid_encode(container);
+	arr = php_corvid_encode(container, 0);
 	if (arr == NULL) { RETURN_THROWS(); }
-	it = php_corvid_encode(item);
+	it = php_corvid_encode(item, 0);
 	if (it == NULL) { corvid_value_free(arr); RETURN_THROWS(); }
 	if (corvid_value_array_push(arr, it) != CORVID_OK) { /* consumes it (§8) */
 		php_corvid_throw_last("corvid_value_array_push failed (not an array value?)");
@@ -3102,9 +3132,9 @@ PHP_METHOD(Corvid_Values, put)
 		Z_PARAM_ZVAL(value)
 	ZEND_PARSE_PARAMETERS_END();
 
-	m = php_corvid_encode(map);
+	m = php_corvid_encode(map, 0);
 	if (m == NULL) { RETURN_THROWS(); }
-	v = php_corvid_encode(value);
+	v = php_corvid_encode(value, 0);
 	if (v == NULL) { corvid_value_free(m); RETURN_THROWS(); }
 	if (corvid_value_map_put(m, ZSTR_VAL(key), ZSTR_LEN(key), v) != CORVID_OK) { /* consumes v (§8) */
 		php_corvid_throw_last("corvid_value_map_put failed (not a map value?)");

@@ -945,9 +945,16 @@ final class Harness
                 return;
 
             case 'UPDATE_ABORT':
+                // The callback aborts the write; the binding re-throws the
+                // callback's OWN exception verbatim (the §1.6 ruling —
+                // symmetric with SCAN). Throwing CorvidException(err:12)
+                // keeps the fixture's err:12 expectation truthful: the
+                // engine's abort status IS CORVID_E_ARGUMENT, and that is
+                // exactly what surfaces here.
                 $err = $this->caught(function () use ($a) {
                     $this->docs()->update($a[0], function ($current) {
-                        throw new RuntimeException('update_abort: aborting per the fixture');
+                        throw new CorvidException('update_abort: aborting per the fixture',
+                            CorvidException::CODE_ARGUMENT);
                     });
                 });
                 $this->expectErr($err, CorvidException::CODE_ARGUMENT);
