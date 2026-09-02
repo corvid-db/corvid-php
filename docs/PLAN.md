@@ -9,7 +9,7 @@ top of that proof it carries the idiomatic PHP API.
 
 Engine repo: `corvid-db/corvid` (read-only upstream; never a submodule, never
 vendored). Canonical docs: the corvid docs site's FFI section (the
-`docs/FFI.md` contract — 124 symbols at v0.3.1, frozen enums, §8 idiom gate).
+`docs/FFI.md` contract — 124 symbols at v0.3.2, frozen enums, §8 idiom gate).
 
 ## The architecture ruling: a native PHP extension in C over libcorvid
 
@@ -45,7 +45,7 @@ Consequences, all locked:
   the release's copies, and normalizes `corvid.h` + the cdylib into
   `deps/current/` (stable name, so `config.m4`'s flags stay
   platform-independent).
-- **Pin EXACT engine tags.** One engine version at a time; today `v0.3.1`.
+- **Pin EXACT engine tags.** One engine version at a time; today `v0.3.2`.
   The pin lives in exactly one variable per fetch script
   (`CORVID_VERSION` / `$CorvidVersion`) and is stamped into
   `deps/version.txt`.
@@ -203,7 +203,7 @@ The rulings this table embodies:
 `Corvid\Values` exposes the value-family reads on this mapping —
 `type()`, `len()`, `asInt()` / `asFloat()` / `asBool()` / `asText()` /
 `asBytes()` / `asVector()` (each `null` on wrong type, mirroring the
-engine's `Option` accessors), `mapKeys()` (the v0.3.1 §4.4 iterator:
+engine's `Option` accessors), `mapKeys()` (the v0.3.0 §4.4 iterator:
 ascending key-byte order; non-maps answer `[]` — inert), `clone()`, and
 the harness-facing `push()` / `put()` container-mutation checks, plus
 `selfCheck()` (the §7 inert shapes: every `_free(NULL)` no-op, NULL-cursor
