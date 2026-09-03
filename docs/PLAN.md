@@ -9,7 +9,7 @@ top of that proof it carries the idiomatic PHP API.
 
 Engine repo: `corvid-db/corvid` (read-only upstream; never a submodule, never
 vendored). Canonical docs: the corvid docs site's FFI section (the
-`docs/FFI.md` contract — 124 symbols at v0.4.0, frozen enums, §8 idiom gate).
+`docs/FFI.md` contract — 124 symbols at v0.4.1, frozen enums, §8 idiom gate).
 
 ## The architecture ruling: a native PHP extension in C over libcorvid
 
@@ -45,7 +45,7 @@ Consequences, all locked:
   the release's copies, and normalizes `corvid.h` + the cdylib into
   `deps/current/` (stable name, so `config.m4`'s flags stay
   platform-independent).
-- **Pin EXACT engine tags.** One engine version at a time; today `v0.4.0`.
+- **Pin EXACT engine tags.** One engine version at a time; today `v0.4.1`.
   The pin lives in exactly one variable per fetch script
   (`CORVID_VERSION` / `$CorvidVersion`) and is stamped into
   `deps/version.txt`.

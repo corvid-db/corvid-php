@@ -51,7 +51,7 @@ Requirements: PHP 8.3+ with its dev headers (`phpize`, `php-config`),
 a C compiler, and `curl` + `shasum`/`sha256sum`.
 
 ```sh
-./fetch.sh                        # download + sha256-verify corvid v0.4.0
+./fetch.sh                        # download + sha256-verify corvid v0.4.1
 ./scripts/build-ext.sh            # phpize + configure + make
 php -d extension=ext/corvid/modules/corvid.so tests/run-golden.php
 php -d extension=ext/corvid/modules/corvid.so examples/quickstart.php
@@ -159,7 +159,7 @@ still needs.
 
 The engine pin lives in one variable per fetch script
 (`CORVID_VERSION` in `fetch.sh`, `$CorvidVersion` in `fetch.ps1`,
-mirrored in `.engine-pin`) — today `v0.4.0`. Artifacts are always taken
+mirrored in `.engine-pin`) — today `v0.4.1`. Artifacts are always taken
 from that exact tag's GitHub release and sha256-verified; `deps/` is
 never committed. Engine-pin bumps fan out to every binding via the
 engine repo's `scripts/bindings/bump.sh`.
