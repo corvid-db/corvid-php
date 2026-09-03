@@ -45,18 +45,6 @@ foreach ($rows as $rank => $r) {
 Failures throw `Corvid\Exception` with the engine's error code in
 `getCode()` (`Corvid\Exception::CODE_*`).
 
-## What's inside
-
-| Path | What it is |
-| --- | --- |
-| `fetch.sh` / `fetch.ps1` | Download the pinned engine release for the host platform, verify it against the release's `checksums.txt` (sha256), byte-compare the vendored `golden/` fixtures against the release's copies, extract into gitignored `deps/current/` |
-| `ext/corvid/` | The extension: `config.m4` (phpize build), `config.w32` (Windows — see the honest note below), `corvid.c` (the whole binding), `php_corvid.h`, `corvid.php` (IDE stubs), `package.xml` (PECL/PIE metadata) |
-| `tests/` | The golden-suite port: `golden_harness.php` (the engine's fixture grammar, dispatch, and checks), `GoldenTest.php` (PHPUnit front), `run-golden.php` (direct driver — the ZTS CI leg's entry) |
-| `golden/` | The engine's golden fixtures, vendored byte-identical (267 executable lines across 8 files) |
-| `examples/` | The six-example tour: quickstart, hybrid RRF+MMR, vector-index families, text search incl. CJK + phrase, graph + delete cascade, geo |
-| `docs/PLAN.md` | The binding's plan: architecture ruling, **the PHP lifecycle section** (FPM/ZTS posture), value mapping table, toolchain policy |
-| `docs/SURFACE.tsv` + `scripts/surface-gate.sh` | Every construct of the engine's public surface resolved to this binding's API + the golden line that proves it (or `N/A` + reason); the gate fails CI on drift |
-
 ## Quick start (from source)
 
 Requirements: PHP 8.3+ with its dev headers (`phpize`, `php-config`),
@@ -83,19 +71,24 @@ at build time. To install system-wide, put `libcorvid.dylib`/`libcorvid.so`
 and `corvid.h` somewhere standard (e.g. `/usr/local/lib`) and rebuild with
 `--with-corvid=/usr/local`.
 
-## Installing (PIE/PECL — pending first release)
+## Installing (PIE over Packagist)
 
-Once published, the install story is PIE (the PHP Installer for
-Extensions, `pie install` replaces the legacy `pecl install` for
-modern PHP):
+The package is **published on Packagist** as
+[`corvid/php-corvid`](https://packagist.org/packages/corvid/php-corvid),
+tag-synced with engine releases, and installs with PIE (the PHP
+Installer for Extensions — the modern replacement for `pecl`):
 
 ```sh
-pie install corvid/php_corvid
+pie install corvid/php-corvid --with-corvid=/path/to/artifacts
 ```
 
-**Not published yet** — this repository is the source of truth until
-the first PECL/PIE release is cut; build from source as above. The
-`package.xml` in `ext/corvid/` carries the metadata for that release.
+The `--with-corvid` directory must hold the engine's published
+`corvid.h` + cdylib (the configure step fails with a clear error
+without them — this extension links the real engine library and never
+vendored binaries). Get the artifacts either way: run `./fetch.sh` in
+a clone (downloads + sha256-verifies the pinned release), or install
+`libcorvid` + `corvid.h` system-wide and point at that (e.g.
+`--with-corvid=/usr/local`).
 
 ## The value mapping
 
