@@ -14,6 +14,7 @@
 
 use Corvid\Collection;
 
+// docs:begin:graph
 function show(string $label, array $keys): void
 {
     printf("%-36s [%s]\n", $label, implode(' ', $keys));
@@ -52,3 +53,4 @@ printf("delete gd: existed = %s (never a document; its edges still cascade)\n", 
 show('neighbors(ga) after deletes', $nodes->neighbors('ga', 'parent_of'));
 show('neighbors(gb) after deletes', $nodes->neighbors('gb', 'parent_of'));
 show('traverse(ga, 2 hops) after', $nodes->traverse('ga', 'parent_of', 2));
+// docs:end:graph

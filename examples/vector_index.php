@@ -17,6 +17,7 @@ use Corvid\Metric;
 use Corvid\Quant;
 use Corvid\Vector;
 
+// docs:begin:vector_index
 $path = sys_get_temp_dir() . '/corvid-php-example-vector-index.redb';
 @unlink($path); // reruns start clean (single-file db)
 
@@ -73,3 +74,4 @@ $db->close();
 $db = Corvid\Db::open($path);
 $items = $db->collection('items');
 runQuery($items, 'v_disk', true, 'ann on-disk after reopen:', $probe);
+// docs:end:vector_index

@@ -14,6 +14,7 @@
 
 use Corvid\Collection;
 
+// docs:begin:text_search
 $corpus = [
     ['n1', 'the quick brown fox jumps over the lazy dog'],
     ['n2', 'a quick red fox leaps over a sleeping dog'],
@@ -58,3 +59,4 @@ search($notes, '数据库', 'bm25 CJK 数据库 (database):');
 phrase($notes, 'fox jumps over', 'phrase "fox jumps over":');
 phrase($notes, 'over jumps fox', 'phrase "over jumps fox" (reversed — no match):');
 phrase($notes, 'leaps over a sleeping', 'phrase with stop words collapsed:');
+// docs:end:text_search

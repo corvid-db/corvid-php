@@ -9,6 +9,7 @@
  * Run: php -d extension=<path>/corvid.so examples/geo.php
  */
 
+// docs:begin:geo
 $cities = [
     ['berlin', 52.52, 13.40],
     ['potsdam', 52.40, 13.06],
@@ -39,3 +40,4 @@ $places->createGeoIndex('loc');
 show('within 600km of Berlin:', $places->geoWithinRadius('loc', 52.52, 13.40, 600.0));
 show('bbox 47..55N, 5..15E:', $places->geoWithinBBox('loc', 47, 5, 55, 15));
 show('nearest 2 to Berlin:', $places->geoNearest('loc', 52.52, 13.40, 2));
+// docs:end:geo
